@@ -1,0 +1,19 @@
+[book]
+authors = ["switefaster"]
+language = "zh-Hans"
+multilingual = false
+src = "src"
+title = "某不正经的WGPU教程"
+
+[rust]
+edition = "2018"
+
+# Sadly no support for MSVC
+# [preprocessor.katex]
+
+[output.html]
+mathjax-support = true
+git-repository-url = "https://github.com/switefaster/wgpu-tutor"
+site-url = "/wgpu-tutor/"
+
+[output.linkcheck]
