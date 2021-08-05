@@ -9,22 +9,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-20.04
+    container: michaelfbryan/mdbook-docker-image
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
     steps:
       - uses: actions/checkout@v2
-
-      - name: Setup mdBook
-        uses: peaceiris/actions-mdbook@v1
-        with:
-          mdbook-version: '0.4.12'
-      
-      - run: "curl -s https://api.github.com/repos/Michael-F-Bryan/mdbook-linkcheck/releases/latest
-              | grep browser_download_url
-              | grep $(rustc -Vv | grep host | cut -d' ' -f2)
-              | cut -d : -f 2,3
-              | tr -d \\\"
-              | wget -qi -"
 
       - run: mdbook build
 
