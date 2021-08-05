@@ -14,5 +14,7 @@ edition = "2018"
 mathjax-support = true
 git-repository-url = "https://github.com/switefaster/wgpu-tutor"
 site-url = "/wgpu-tutor/"
+additional-css = ["extra-style.css"]
+additional-js = ["tag-replacer.js"]
 
 [output.linkcheck]

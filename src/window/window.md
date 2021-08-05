@@ -34,6 +34,6 @@ fn main() {
 
 `winit::window::Window`便是窗口的主体了，主要负责保管窗口句柄，窗口大小，光标位置等的数据，具体可以设置以及获取的数据请参见[Window的文档](https://docs.rs/winit/0.25.0/winit/window/struct.Window.html)和[WindowBuilder的文档](https://docs.rs/winit/0.25.0/winit/window/struct.WindowBuilder.html)。值得一提的是`Window`实现了`HasRawWindowHandle`，所以可以直接将`&Window`作为各类图形库的窗口句柄输入。
 
-`EventLoop::run`接受`F: 'static + FnMut(Event<'_, T>, &EventLoopWindowTarget<T>, &mut ControlFlow)`作为回调函数。第一个参数显然是窗口发送的事件，第二个参数是可以`Deref`出`&EventLoop`的一个包装，主要方便用户在事件处理过程中创建新的窗口，而第三个参数负责控制窗口状态，用法例如`*control_flow = ControlFlow::Exit`。在一次回调结束后，winit会根据ControlFlow的值改变窗口的状态，比如关闭窗口等。~~一切都是borrow checker的选择~~
+`EventLoop::run`接受`F: 'static + FnMut(Event<'_, T>, &EventLoopWindowTarget<T>, &mut ControlFlow)`作为回调函数。第一个参数显然是窗口发送的事件，第二个参数是可以`Deref`出`&EventLoop`的一个包装，主要方便用户在事件处理过程中创建新的窗口，而第三个参数负责控制窗口状态，用法例如`*control_flow = ControlFlow::Exit`。在一次回调结束后，winit会根据ControlFlow的值改变窗口的状态，比如关闭窗口等。<mask>一切都是borrow checker的选择</mask>
 
 下一节，我们将会介绍如何处理窗口发送的事件，并且确定程序循环的主体。
