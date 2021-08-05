@@ -4,7 +4,7 @@
 
 ## 简介
 
-《某不正经的WGPU教程》，又名《小学生站在马桶上都能看懂的WGPU教程》~~、《高中生站在马桶上也能看懂的WGPU教程》~~。是由[switefaster](https://github.com/switefaster)编写的中文WGPU教程，语言随意，建议读作茶余饭后打发时间用。
+《某不正经的WGPU教程》，又名《小学生坐在马桶上都能看懂的WGPU教程》~~、《高中生站在马桶上也能看懂的WGPU教程》~~。是由[switefaster](https://github.com/switefaster)编写的中文WGPU教程，语言随意，建议读作茶余饭后打发时间用。
 
 ## 关于这个仓库
 
