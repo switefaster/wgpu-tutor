@@ -1,4 +1,6 @@
 {
     "html": false,
-    "line-length": false
+    "line-length": false,
+    "no-empty-links": false,
+    "no-trailing-punctuation": false
 }
