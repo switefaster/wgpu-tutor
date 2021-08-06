@@ -20,12 +20,7 @@ jobs:
           mdbook-version: '0.4.12'
 
       - name: Setup linkcheck
-        run: "curl -s https://api.github.com/repos/Michael-F-Bryan/mdbook-linkcheck/releases/latest
-              | grep browser_download_url
-              | grep $(rustc -Vv | grep host | cut -d' ' -f2)
-              | cut -d : -f 2,3
-              | tr -d \\\"
-              | sudo wget -qi - -P /usr/bin/"
+        run: cargo install mdbook-linkcheck
 
       - run: mdbook build
 
