@@ -17,7 +17,7 @@
 ### 自定义HTML脚标
 
 本书自定义了一些HTML脚标以方便一些样式的书写。
-样式定义位于[extra-style.css](./extra-style.css)，[tag-replacer.js](./tag-replacer.js)会替换相应的tag为`<span class=""></span>`的形式。
+样式定义位于[extra-style.css](./extra-style.css)
 
 - `<mask>黑幕</mask>` 生成一个鼠标移上才会显示的黑幕
 - 暂无更多
