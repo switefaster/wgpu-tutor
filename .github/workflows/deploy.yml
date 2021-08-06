@@ -24,8 +24,6 @@ jobs:
 
       - run: mdbook build
 
-      - run: apt-get update & apt-get -y --fix-missing install git
-
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.ref == 'refs/heads/main' }}
