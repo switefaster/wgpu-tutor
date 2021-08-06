@@ -1,17 +1,18 @@
 # Summary
 
+[说在前面](./README.md)
+
 # WGPU入门
 
-[引言](./README.md)
-
-- [程序，窗口，主循环](./window/README.md)
-  - [打开窗口](./window/window.md)
-  - [事件发生！](./window/event.md)
-    - [太快了！](./window/interval.md)
-- [设备，队列，交换链？](./infra/README.md)
-  - [图形学，从入门到入土](./infra/graphics.md)
-  - [认识WGPU](./infra/wgpu.md)
-  - [一切的起点——初始化](./infra/init.md)
+- [引言](./wgpu/README.md)
+- [程序，窗口，主循环](./wgpu/window/README.md)
+  - [打开窗口](./wgpu/window/window.md)
+  - [事件发生！](./wgpu/window/event.md)
+    - [太快了！](./wgpu/window/interval.md)
+- [设备，队列，交换链？](./wgpu/infra/README.md)
+  - [图形学，从入门到入土](./wgpu/infra/graphics.md)
+  - [认识WGPU](./wgpu/infra/wgpu.md)
+  - [一切的起点——初始化](./wgpu/infra/init.md)
 - [顶点，像素，着色器！]()
   - [七巧板？——图形与三角]()
   - [一闪一闪亮晶晶——像素与窗口]()
