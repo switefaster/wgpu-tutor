@@ -10,7 +10,7 @@ __阅读本文需要[Rust](https://www.rust-lang.org)基础，以及一小部分
 > <p align="right">——佚名</p>
 
 <!---->
-> 放你妈的屁
+> __FNMDP__
 > <p align="right">——switefaster</p>
 
 蚌埠住了。

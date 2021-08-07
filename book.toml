@@ -15,5 +15,9 @@ mathjax-support = true
 git-repository-url = "https://github.com/switefaster/wgpu-tutor"
 site-url = "/wgpu-tutor/"
 additional-css = ["extra-style.css"]
+additional-js =["mermaid.min.js", "mermaid-init.js"]
 
 [output.linkcheck]
+[preprocessor]
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
