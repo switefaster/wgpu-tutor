@@ -8,14 +8,14 @@ title = "某不正经的WGPU教程"
 [rust]
 edition = "2018"
 
-# [preprocessor.katex]
+[preprocessor.katex]
 
 [output.html]
-mathjax-support = true
+# mathjax-support = true
 git-repository-url = "https://github.com/switefaster/wgpu-tutor"
 site-url = "/wgpu-tutor/"
 additional-css = ["extra-style.css"]
-additional-js =["mermaid.min.js", "mermaid-init.js"]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
 [output.linkcheck]
 [preprocessor]

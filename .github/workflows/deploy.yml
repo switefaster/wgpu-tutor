@@ -25,6 +25,9 @@ jobs:
       - name: Setup mermaid
         run: cargo install mdbook-mermaid
 
+      - name: Setup katex
+        run: cargo install mdbook-katex
+
       - run: mdbook build
 
       - name: Deploy
