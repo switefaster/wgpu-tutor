@@ -15,7 +15,7 @@ edition = "2018"
 git-repository-url = "https://github.com/switefaster/wgpu-tutor"
 site-url = "/wgpu-tutor/"
 additional-css = ["extra-style.css"]
-additional-js = ["mermaid.min.js", "mermaid-init.js"]
+additional-js = ["mermaid.min.js", "mermaid-init.js", "bundle.js"]
 
 [output.linkcheck]
 [preprocessor]
