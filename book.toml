@@ -6,7 +6,7 @@ src = "src"
 title = "某不正经的WGPU教程"
 
 [rust]
-edition = "2018"
+edition = "2021"
 
 [preprocessor.katex]
 
