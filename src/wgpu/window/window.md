@@ -8,7 +8,7 @@
 # Cargo.toml
 # ...
 [dependencies]
-winit = "0.25.0"
+winit = "0.26"
 ```
 
 然后创建窗口

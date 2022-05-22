@@ -15,7 +15,7 @@ resolver = "2" #!IMPORTANT 这对 wgpu >= 0.10 是必要的
 # UPDATE: 从rust edition 2021开始 resolver = 2 是缺省的
 
 [dependencies]
-winit = "0.26.0"
+winit = "0.26"
 wgpu = "0.12"
 pollster = "0.2"
 ```
