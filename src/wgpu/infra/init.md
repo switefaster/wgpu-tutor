@@ -15,8 +15,8 @@ resolver = "2" #!IMPORTANT 这对 wgpu >= 0.10 是必要的
 # UPDATE: 从rust edition 2021开始 resolver = 2 是缺省的
 
 [dependencies]
-winit = "0.26"
-wgpu = "0.12"
+winit = "0.27"
+wgpu = "0.14"
 pollster = "0.2"
 ```
 
@@ -30,16 +30,13 @@ pollster = "0.2"
 
 ```rust
 fn main() {
-    #[cfg(target_os = "linux")]
-    std::env::set_var("WINIT_UNIX_BACKEND", "x11"); // 默认的Wayland窗口太tm难看了，我强行设置成X11了
-
-    let event_loop = EventLoop::new();
-    let window = WindowBuilder::new()
-        .with_title("不想起名")
+    let event_loop = winit::event_loop::EventLoop::new();
+    let window = winit::window::WindowBuilder::new()
+        .with_title("Test Window")
         .build(&event_loop)
         .unwrap();
 
-    let instance = wgpu::Instance::new(Backends::all());
+    let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY); // 如果要在WSL里面使用，建议使用GL
 
     // ...
 }
@@ -50,11 +47,12 @@ fn main() {
 ```rust
 // ...
 let surface = unsafe { instance.create_surface(&window) };
-    let adapter = pollster::block_on(instance.request_adapter(&RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: Some(&surface),
-    }))
-    .unwrap();
+let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+    power_preference: wgpu::PowerPreference::HighPerformance,
+    compatible_surface: Some(&surface),
+    force_fallback_adapter: false,
+}))
+.unwrap();
 ```
 
 等等等等，不妙啊，怎么会出现`unsafe`呢？大可放心，这个`unsafe`只是警告你要保证`Surface`存活期间`RawWindowHandle`是有效的。`winit`会帮我们保证这个，我们就甭管了:P。
@@ -79,10 +77,10 @@ let adapter = instance
 
 ```rust
 let (device, queue) = pollster::block_on(adapter.request_device(
-        &DeviceDescriptor {
-            label: None, // 如果你给他起个名字，调试的时候可能比较有用
-            features: wgpu::Features::empty(),
-            limits: wgpu::Limits::default(),
+        &wgpu::DeviceDescriptor {
+            label: None,                  // 如果你给他起个名字，调试的时候可能比较有用
+            features: adapter.features(), // 根据需要的特性自行调整
+            limits: adapter.limits(),     // 根据需要的限定自行调整
         },
         None,
     ))
@@ -96,58 +94,59 @@ let (device, queue) = pollster::block_on(adapter.request_device(
 万事俱备！……吗？我们好像还没告诉WGPU咱们的帧缓冲得多大啊……
 
 ```rust
-let mut surface_config = SurfaceConfiguration {
-        usage: TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_preferred_format(&adapter).unwrap(),
+let mut surface_config = wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: surface.get_supported_formats(&adapter)[0],
         width: window.inner_size().width,
         height: window.inner_size().height,
-        present_mode: wgpu::PresentMode::Fifo,
+        present_mode: wgpu::PresentMode::AutoVsync,
+        alpha_mode: wgpu::CompositeAlphaMode::Auto,
     };
 
-    surface.configure(&device, &surface_config);
+surface.configure(&device, &surface_config);
 ```
 
-我们将`Surface`的帧缓冲配置为我们窗口的大小，并告诉他我们的帧缓冲可以用来当`RENDER_ATTACHMENT`，人话说就是可以当渲染目标的东西。然后给他挑了个他最喜欢的格式。查询 `PresentMode` 的文档你会发现有 `Fifo`/`MailBox`/`Immediate` 三种。前两种是 __垂直同步__ 的，也就是说当窗口需要被显示时程序会等到该帧被完全显示，通常这取决于显示屏的刷新率，这会减少画面割裂的产生。而最后一种则是立即显示，这种情况下最能反应当前设备下能达到的最优帧率。虽然不一定好就是了。
+我们将`Surface`的帧缓冲配置为我们窗口的大小，并告诉他我们的帧缓冲可以用来当`RENDER_ATTACHMENT`，人话说就是可以当渲染目标的东西。然后给他挑了个他最喜欢的格式。查询 `PresentMode` 的文档你会发现有多种模式，详情请参照文档。其中几种是 __垂直同步__ 的，也就是说当窗口需要被显示时程序会等到该帧被完全显示，通常这取决于显示屏的刷新率，这会减少画面割裂的产生。而最后一种则是立即显示，这种情况下最能反应当前设备下能达到的最优帧率。虽然不一定好就是了。
 
 这下真万事俱备了，但是我们还需要对我们的循环做一点小调整。
 
 ```rust
 event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
+    *control_flow = ControlFlow::Wait;
 
-        match event {
-            winit::event::Event::WindowEvent { event, window_id } if window.id() == window_id => {
-                match event {
-                    winit::event::WindowEvent::Resized(new_size) => {
-                        if new_size.width > 0 && new_size.height > 0 {
-                            surface_config.width = new_size.width;
-                            surface_config.height = new_size.height;
-                            surface.configure(&device, &surface_config);
-                        }
+    match event {
+        winit::event::Event::WindowEvent { event, window_id } if window.id() == window_id => {
+            match event {
+                winit::event::WindowEvent::Resized(new_size) => {
+                    if new_size.width > 0 && new_size.height > 0 {
+                        surface_config.width = new_size.width;
+                        surface_config.height = new_size.height;
+                        surface.configure(&device, &surface_config);
                     }
-                    winit::event::WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    winit::event::WindowEvent::ScaleFactorChanged {
-                        new_inner_size: new_size,
-                        ..
-                    } => {
-                        if new_size.width > 0 && new_size.height > 0 {
-                            surface_config.width = new_size.width;
-                            surface_config.height = new_size.height;
-                            surface.configure(&device, &surface_config);
-                        }
-                    }
-                    _ => (),
                 }
+                winit::event::WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                winit::event::WindowEvent::ScaleFactorChanged {
+                    new_inner_size: new_size,
+                    ..
+                } => {
+                    if new_size.width > 0 && new_size.height > 0 {
+                        surface_config.width = new_size.width;
+                        surface_config.height = new_size.height;
+                        surface.configure(&device, &surface_config);
+                    }
+                }
+                _ => (),
             }
-            winit::event::Event::MainEventsCleared => {
-                window.request_redraw();
-            }
-            winit::event::Event::RedrawRequested(_) => {
-                // 哦！在这渲染
-            }
-            _ => (),
         }
-    });
+        winit::event::Event::MainEventsCleared => {
+            window.request_redraw();
+        }
+        winit::event::Event::RedrawRequested(_) => {
+            // 在这渲染  
+        }
+        _ => (),
+    }
+});
 ```
 
 上面的代码，说人话，就是在窗口大小变化的时候重新配置一下咱们的`Surface`。熟悉了渲染流程的读者可能已经猜到，如果不这么做，很有可能导致巨大的窗口上只寥寥显示了几个巨大的像素的惨剧……
@@ -165,25 +164,29 @@ event_loop.run(move |event, _, control_flow| {
 这就是我们的代码将要做的。
 
 ```rust
-let output = surface.get_current_frame().unwrap().output;
-let view = output.texture.create_view(&TextureViewDescriptor::default());
+let output = surface.get_current_texture().unwrap();
+let view = output
+    .texture
+    .create_view(&wgpu::TextureViewDescriptor::default());
 let mut encoder =
-                    device.create_command_encoder(&CommandEncoderDescriptor::default());
-                { // 注意这个
-                    let _render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                        label: None,
-                        color_attachments: &[RenderPassColorAttachment {
-                            view: &view,
-                            resolve_target: None,
-                            ops: Operations {
-                                load: LoadOp::Clear(Color::GREEN),
-                                store: true,
-                            },
-                        }],
-                        depth_stencil_attachment: None,
-                    });
-                }
-                queue.submit(std::iter::once(encoder.finish()));
+    device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+{
+    // 注意这个
+    let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: None,
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: &view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                store: true,
+            },
+        })],
+        depth_stencil_attachment: None,
+    });
+}
+queue.submit(std::iter::once(encoder.finish()));
+output.present();
 ```
 
 也挺直白的，不是么？
@@ -196,6 +199,6 @@ let mut encoder =
 
 __SO EZ!__
 
-~~当然，有些东西还是需要我们注意的。从`Surface`请求的帧缓冲的生命周期是被WGPU监视的，一旦其`drop()`被调用，它就会立刻尝试将其从渲染位置置换出来而显示出去。在一些复杂的项目中，如果不注意其生命周期，WGPU会进行panic，因此我们需要注意这一点。~~ __从`0.11`开始改为手动调用`Surface::present()`__ 另外值得我们注意的是，为了内存安全需要，当然也是因为其内部操作的必要，`RenderPass` 内部保留着一个 `&mut CommandEncoder`，换而言之，我们的编码器的数据是流入`RenderPass`中的，因此我们需要稍微控制其生命周期，以防止Rust编译器对你狂暴鸿儒大量错误。这也是为什么我们打了一组看似多余的`{}`。
+~~当然，有些东西还是需要我们注意的。从`Surface`请求的帧缓冲的生命周期是被WGPU监视的，一旦其`drop()`被调用，它就会立刻尝试将其从渲染位置置换出来而显示出去。在一些复杂的项目中，如果不注意其生命周期，WGPU会进行panic，因此我们需要注意这一点。~~ __从`0.11`开始改为手动调用`SurfaceTexture::present()`__ 另外值得我们注意的是，为了内存安全需要，当然也是因为其内部操作的必要，`RenderPass` 内部保留着一个 `&mut CommandEncoder`，换而言之，我们的编码器的数据是流入`RenderPass`中的，因此我们需要稍微控制其生命周期，以防止Rust编译器对你狂暴鸿儒大量错误。这也是为什么我们打了一组看似多余的`{}`。
 
 不出意外的话，我们的程序现在可以顺利运行，并且你会看到一片绿到发光的屏幕<mask>没有暗讽各位读者的意思，大概</mask>。于是，我们正式迈出了使用WGPU的第一步。不过请注意，我们激动人心的旅程才刚刚开始！
