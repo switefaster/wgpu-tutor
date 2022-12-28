@@ -10,7 +10,7 @@
 
 ### 工具
 
-本书使用[mdBook v0.4.12](https://github.com/rust-lang/mdBook)编写
+本书使用[mdBook v0.4.25](https://github.com/rust-lang/mdBook)编写
 
 > 本书使用了[mdbook-linkcheck](https://github.com/Michael-F-Bryan/mdbook-linkcheck)后端，以及[mdbook-katex](https://github.com/lzanini/mdbook-katex)预处理器，但是后者暂未支持MSVC工具链。若有自行构建需求者，请注意安装。
 
