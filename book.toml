@@ -9,6 +9,7 @@ title = "某不正经的WGPU教程"
 edition = "2021"
 
 [preprocessor.katex]
+renderers = ["html"]
 
 [output.html]
 # mathjax-support = true
@@ -21,3 +22,5 @@ additional-js = ["mermaid.min.js", "mermaid-init.js"]
 [preprocessor]
 [preprocessor.mermaid]
 command = "mdbook-mermaid"
+
+[output.katex]
