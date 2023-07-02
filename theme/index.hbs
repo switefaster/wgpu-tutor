@@ -320,6 +320,25 @@
     <script type="text/javascript" src="{{ ../path_to_root }}{{this}}"></script>
     {{/each}}
 
+    <!-- Have to do this as mermaid relies on ESM now -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.2.4/+esm'
+
+        function patchMermaidCodeElementClass() {
+            var elements = document.getElementsByClassName("language-mermaid");
+            Array.from(elements).forEach(element => {
+                if (element.tagName.toLowerCase() == "code") {
+                    element.className = "mermaid";
+                }
+            });
+
+        }
+
+        patchMermaidCodeElementClass();
+
+        mermaid.initialize({ startOnLoad: true })
+    </script>
+
     {{#if is_print}}
     {{#if mathjax_support}}
     <script type="text/javascript">

@@ -9,18 +9,10 @@ title = "某不正经的WGPU教程"
 edition = "2021"
 
 [preprocessor.katex]
-renderers = ["html"]
-
-[preprocessor.mermaid]
-command = "mdbook-mermaid"
+after = ["links"]
 
 [output.html]
 # mathjax-support = true
 git-repository-url = "https://github.com/switefaster/wgpu-tutor"
 site-url = "/wgpu-tutor/"
 additional-css = ["extra-style.css"]
-additional-js = ["mermaid.min.js", "mermaid-init.js"]
-
-[output.linkcheck]
-
-[output.katex]

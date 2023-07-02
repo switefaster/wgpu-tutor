@@ -1,0 +1,20 @@
+services:
+  serve:
+    image: mdbook
+    build:
+      context: .
+      dockerfile: deploy/mdbook.dockerfile
+    ports:
+      - 3000:3000
+      - 3001:3001
+    x-develop:
+      watch:
+        - path: theme/
+          action: rebuild
+        - path: book.toml
+          action: rebuild
+        - path: extra-style.css
+          action: rebuild
+        - path: src/
+          target: /book/src
+          action: sync
