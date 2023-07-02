@@ -29,7 +29,7 @@ jobs:
         if: ${{ github.ref == 'refs/heads/main' }}
         with:
           personal_token: ${{ secrets.UPLOAD_TOKEN }}
-          publish_dir: ./book/html
+          publish_dir: ./book
           publish_branch: main
           destination_dir: wgpu-tutor
           external_repository: switefaster/switefaster.github.io
