@@ -2,7 +2,7 @@
 
 控制恒定的更新速度是游戏中常见的需求，这一节我们将介绍一种简单的控制更新频率的方法。
 
-玩过 __Minecraft™__ 吗？Minecraft中的游戏逻辑循环是以20次/秒的频率进行的，称为 20 __tps(_ticks per second_)__，而渲染循环却以不同的频率（通常为60个画面（称为 __帧__）每秒，称为60 __fps(_frames per second_)__）刷新。较低的逻辑更新频率可以减少计算的负担，而更高的渲染频率则可以使游戏显得更加流畅。如果更新的速度不均匀，则可能使游戏显示的画面有违和的跳动。那么，我们应该如何控制更新的频率呢？
+玩过 **Minecraft™** 吗？Minecraft中的游戏逻辑循环是以20次/秒的频率进行的，称为 20 **tps(_ticks per second_)**，而渲染循环却以不同的频率（常见的为60个画面（称为 **帧**）每秒，称为60 **fps(_frames per second_)**）刷新。较低的逻辑更新频率可以减少计算的负担，而更高的渲染频率则可以使游戏显得更加流畅。如果更新的速度不均匀，则可能使游戏显示的画面有违和的跳动。那么，我们应该如何控制更新的频率呢？
 
 考虑这样一个问题，我们希望一个循环以60次每秒的速度进行更新，那么每次循环的平均用时应当为 $\tau_{0} = \frac {1} {60} sec = 0.016sec$，现在有两种情况:
 
@@ -54,7 +54,15 @@ const TPS_1: f64 = 20.0;
 const TIMEOUT: f32 = 3.0;
 
 fn update(dt: Duration) {
-    println!("delta tau: {:?}", dt);
+    println!("60 tps delta tau: {:?}", dt);
+}
+
+fn slow_update(dt: Duration) {
+    println!("20 tps delta tau: {:?}", dt);
+}
+
+fn fast_update(dt: Duration) {
+    // 以最快可能速度运行的逻辑，通常不会使用
 }
 
 fn main() {
@@ -73,13 +81,14 @@ fn main() {
         lag_1 += dt;
         while lag_0 > tau_0 {
             update(tau_0);
-            lag_0 -= tau;
+            lag_0 -= tau_0;
         }
         while lag_1 > tau_1 {
             slow_update(tau_1);
-            lag_1 -= tau;
+            lag_1 -= tau_1;
         }
         fast_update(dt);
+        // 为了使其能够在 playground 中运行，加上了超时限制。在实际应用中并不需要这几行
         if begin.elapsed() > timeout {
             break;
         }

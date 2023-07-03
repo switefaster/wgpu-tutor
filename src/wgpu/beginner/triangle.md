@@ -28,11 +28,11 @@
 bytemuck = "1"
 ```
 
-这个库将会帮助我们将结构体直接转化为字节slice`&[u8]`，并保证我们的操作是安全的。
+这个库将会帮助我们将结构体直接转化为字节数组切片`&[u8]`，并保证我们的操作是安全的。
 
 我们来定义我们的顶点
 
-```rust
+```rust,no_run
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
@@ -45,7 +45,7 @@ struct Vertex {
 
 接下来，让我们进行一个三角形的编：
 
-```rust
+```rust,no_run
 let triangle = [
     Vertex {
         position: [0.0, 0.5],
@@ -70,14 +70,16 @@ let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescripto
 
 首先我们创建了一个顶点的数组，其次我们将其用`bytemuck`转化为字节后上传到了一个缓冲中。
 
+> 有些读者可能会好奇为何我们为三角形的顶点坐标选择了这几个数值。粗略地说，在WGPU中，我们会把一个$\left[-1,1\right]\times\left[-1,1\right]$中的点线性映射到窗口的像素中。具体而言，$\left(0,0\right)$会被平移到窗口中央，而$\hat{x}$和$\hat{y}$分别对应屏幕右方向和上方向。在渲染过程中涉及的各个坐标系将会在后面的章节详细讲述。
+
 这里我们首次使用了`Device::create_buffer_init`。事实上，这是一个扩展函数，是不位于WebGPU标准中，WGPU库为了方便使用而添加的一些方法。类似这些的方法被定义在`DeviceExt`这个trait中。
 
 那么，`create_buffer_init`到底为我们干了什么呢？它主要干了这样两件事：
 
-1. 创建一个 __合适__ 大小的缓冲
+1. 创建一个 **合适** 大小的缓冲
 2. 把我们的数据扔进去
 
-通过翻阅代码（我也鼓励读者如此操作），我们可以发现`create_buffer_init`的所作所为不外乎上面两件事。那么为什么我要强调 __合适__ 大小的缓冲呢？这和Vulkan等WGPU使用的底层API的限定有关。如果我们查看`create_buffer_init`实现中的注释，我们会发现如果要拷贝数据进入缓冲中（换句话说，有`BufferUsages::COPY`），Vulkan要求创建的缓冲的大小必须是`COPY_BUFFER_ALIGNMENT`的倍数。`create_buffer_init`会自动帮我们把缓冲的大小垫（_padding_）到距离我们传入的数据大小大于且最近的满足要求的大小。换句话说，我们通过这个方法创建的缓冲未必就是我们传入的数据的大小！如果读者需要更精确地控制缓冲的大小，我们建议使用`create_buffer`方法并手动上传数据。
+通过翻阅代码（我也鼓励读者如此操作），我们可以发现`create_buffer_init`的所作所为不外乎上面两件事。那么为什么我要强调 **合适** 大小的缓冲呢？这和Vulkan等WGPU使用的底层API的限定有关。如果我们查看`create_buffer_init`实现中的注释，我们会发现如果要拷贝数据进入缓冲中（换句话说，有`BufferUsages::COPY`），Vulkan要求创建的缓冲的大小必须是`COPY_BUFFER_ALIGNMENT`的倍数。`create_buffer_init`会自动帮我们把缓冲的大小垫（_padding_）到距离我们传入的数据大小大于且最近的满足要求的大小。换句话说，我们通过这个方法创建的缓冲未必就是我们传入的数据的大小！如果读者需要更精确地控制缓冲的大小，我们建议使用`create_buffer`方法并手动上传数据。
 
 接下来，你可能会兴致冲冲地去准备把三角形画出来。可是，WGPU怎么知道怎么理解我们上传的数据呢？如你所见，我们仅仅是上传了很多字节而已。不出意外的话，我们应当得手动描述缓冲的形状（_layout_）才对。
 
@@ -87,7 +89,7 @@ let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescripto
 
 让我们开始吧：
 
-```rust
+```rust,no_run
 let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
     label: None,
     bind_group_layouts: &[],
@@ -128,8 +130,22 @@ let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 
 ```
 
-哇塞，真多！而且是不是都是看不懂的新玩意……
+这段代码涉及了众多之后才能理解的概念，我会尽量使用通俗的语言描述。
 
-对此，我只能说：_你先别急，让我先急_
+首先我们需要为管线创建一个布局（_layout_），这个布局描述了我们之后将会向管线的着色器内传入什么样的额外数据。这里额外数据指任何顶点数据以外的用户指定的数据。由于我们现在并不需要向着色器内传入额外的数据，我们先全部留空。
 
-笔者也是非常的头大的！在这短短（？）的几行代码中，已知与未知交织在一起，令我无从下手。
+接下来，我们将我们的着色器文件载入到GPU中。在[之前的章节](../infra/graphics.md)最后对渲染管线的描述中我们提到过，着色器是一种告诉GPU如何完成传入的顶点数据的变化和如何给像素着色等任务的语言。在接下来的几个章节中我们将会更详细地了解着色器。创建好着色器以后我们会得到着色器模块（_ShaderModule_），相当于对GPU内着色器资源的引用。在示例创建着色器的过程中，我们使用了`wgpu::include_wgsl!`这个宏。这个宏会在 **编译期** 将你的着色器载入到程序中，并用其创建一个`wgpu::ShaderModuleDescriptor`。如果你翻阅了[ShaderModuleDescriptor的文档](https://docs.rs/wgpu/latest/wgpu/struct.ShaderModuleDescriptor.html)，会发现其中的`wgpu::ShaderSource`支持相当数量的着色器语言。归功于[naga项目](https://github.com/gfx-rs/naga)，不同的着色器语言最终都会被转译成WGPU可以理解的格式。在接下来的教程中，我们只会使用`wgsl`。
+
+接下来我们就在正式创建渲染管线了。因为用途平凡或内容不会涉及，我们将不会在此深入解释下面几个字段的意义：
+
+- label
+- layout
+- multisample
+- multiview
+
+让我们把注意力放到剩下的几个字段上：
+
+_vertex_ 会用来描述该渲染管线对顶点数据的处理。在示例代码中，我们指定了着色器和着色器的入口点（也就是会被调用的着色器函数），还有对顶点缓冲的描述。你可能会好奇为什么顶点缓冲的描述是一个数组，这是因为一次渲染命令可以同时传入多个顶点缓冲，这被用于一些特殊的渲染中。让我们研究一下单个顶点缓冲的描述：
+
+- _array\_stride_ 描述多少字节表示一个顶点
+- _step\_mode_ 描述这个顶点缓冲内数据在什么情况步进一次。

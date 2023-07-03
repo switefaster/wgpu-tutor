@@ -15,12 +15,12 @@ resolver = "2" #!IMPORTANT 这对 wgpu >= 0.10 是必要的
 # UPDATE: 从rust edition 2021开始 resolver = 2 是缺省的
 
 [dependencies]
-winit = "0.27"
-wgpu = "0.14"
-pollster = "0.2"
+winit = "0.28"
+wgpu = "0.16"
+pollster = "0.3"
 ```
 
-可以看到，除了`winit`外，我们迎来了两位新朋友。第一位当然是我们的主角`wgpu`，而出于对 __WebGPU__ 规范的遵从，`wgpu`包含了少量异步(`async`)函数。当然我们希望我们能将这些异步函数像同步函数一样处理(当然这会不可避免地造成阻塞，有异步需求的同学请自行摸索)，因而我们需要有一个`Executor`实现来阻塞地运行某个`Future`，出于方便，我们选择了`pollster`，其提供了一个简单的`pollster::block_on`函数。
+可以看到，除了`winit`外，我们迎来了两位新朋友。第一位当然是我们的主角`wgpu`，而出于对 **WebGPU** 规范的遵从，`wgpu`包含了少量异步(`async`)函数。当然我们希望我们能将这些异步函数像同步函数一样处理(当然这会不可避免地造成阻塞，有异步需求的同学请自行摸索)，因而我们需要有一个`Executor`实现来阻塞地运行某个`Future`，出于方便，我们选择了`pollster`，其提供了一个简单的`pollster::block_on`函数。
 
 准备完毕，我们可以开始了。
 
@@ -28,7 +28,9 @@ pollster = "0.2"
 
 看过上一节以及上上节的读者应该已经知道，WGPU的一切应当从`wgpu::Instance`开始。WGPU的代码都相当直接，所以我们先直接看代码吧。
 
-```rust
+```rust,no_run
+use pollster::FutureExt; // 有了这个我们就可以对任意Future使用block_on()了
+
 fn main() {
     let event_loop = winit::event_loop::EventLoop::new();
     let window = winit::window::WindowBuilder::new()
@@ -36,37 +38,40 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY); // 如果要在WSL里面使用，建议使用GL
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::PRIMARY,
+        dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+    }); // 如果要在WSL里面使用，建议使用GL
 
     // ...
 }
 ```
 
-当然，上面这段代码没什么好解释的。`wgpu::Backends`是一个`BitSet`，每个不同的位表示了尝试使用这个后端(_1_)与否(_0_)。当然，如果你全选了WGPU通常会根据你的系统自动帮你挑一个，有需要的就自己指定吧。于是，我们有了实例，该获取`Surface`了。
+`wgpu::InstanceDescriptor`描述了我们需要创建的实例的基本信息。`wgpu::Backends`是一个`BitSet`，每个不同的位表示了尝试使用这个后端(_1_)与否(_0_)。当然，如果你全选了WGPU通常会根据你的系统自动帮你挑一个，有需要的就自己指定吧。`dx12_shader_compiler`则指定由`DirectX`使用的着色器语言`HLSL`的编译器。我们通篇都会使用`WGSL`，也不需要特殊的`HLSL`配置，便可以选择自带的`Fxc`。接下来，我们有了实例，该获取`Surface`了
 
-```rust
+```rust,no_run
 // ...
-let surface = unsafe { instance.create_surface(&window) };
-let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-    power_preference: wgpu::PowerPreference::HighPerformance,
-    compatible_surface: Some(&surface),
-    force_fallback_adapter: false,
-}))
-.unwrap();
+let surface = unsafe { instance.create_surface(&window).unwrap() };
+let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: Some(&surface),
+        force_fallback_adapter: false,
+    })
+    .block_on()
+    .unwrap();
 ```
 
 等等等等，不妙啊，怎么会出现`unsafe`呢？大可放心，这个`unsafe`只是警告你要保证`Surface`存活期间`RawWindowHandle`是有效的。`winit`会帮我们保证这个，我们就甭管了:P。
 
-同时我们还接着获取了适配器，`request_adapter`这个函数会让`Instance`帮你挑一个满足你要求的适配器。好像参数也没啥好解释的……`wgpu::PowerPreference`会决定WGPU倾向于选择集显还是核显，看你咯。
+同时我们还接着获取了适配器，`request_adapter`这个函数会让`Instance`帮你挑一个满足你要求的适配器。好像参数也没啥好解释的……`wgpu::PowerPreference`会决定WGPU倾向于选择独显还是集显，看你咯。
 
 当然，如果你想自己枚举适配器，也是可以的。方法大致如下：
 
-```rust
+```rust,no_run
 let adapter = instance
     .enumerate_adapters(wgpu::Backends::all())
     .filter(|adapter| {
-        // 这个就是request_adapter帮你干的事之一
-        surface.get_preferred_format(&adapter).is_some()
+        // 筛选你需要的适配器
     })
     .first()
     .unwrap()
@@ -75,15 +80,16 @@ let adapter = instance
 
 好，底层干部基本就位了，接下来我们就要请出我们的一线工人`Queue`和`Device`。
 
-```rust
-let (device, queue) = pollster::block_on(adapter.request_device(
+```rust,no_run
+let (device, queue) = adapter.request_device(
         &wgpu::DeviceDescriptor {
             label: None,                  // 如果你给他起个名字，调试的时候可能比较有用
             features: adapter.features(), // 根据需要的特性自行调整
             limits: adapter.limits(),     // 根据需要的限定自行调整
         },
         None,
-    ))
+    )
+    .block_on()
     .unwrap();
 ```
 
@@ -93,24 +99,28 @@ let (device, queue) = pollster::block_on(adapter.request_device(
 
 万事俱备！……吗？我们好像还没告诉WGPU咱们的帧缓冲得多大啊……
 
-```rust
+```rust,no_run
+let capabilities = surface.get_capabilities(&adapter);
+
 let mut surface_config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_supported_formats(&adapter)[0],
+        format: capabilities.formats[0],
         width: window.inner_size().width,
         height: window.inner_size().height,
         present_mode: wgpu::PresentMode::AutoVsync,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
+        view_formats: vec![],
     };
 
 surface.configure(&device, &surface_config);
 ```
 
-我们将`Surface`的帧缓冲配置为我们窗口的大小，并告诉他我们的帧缓冲可以用来当`RENDER_ATTACHMENT`，人话说就是可以当渲染目标的东西。然后给他挑了个他最喜欢的格式。查询 `PresentMode` 的文档你会发现有多种模式，详情请参照文档。其中几种是 __垂直同步__ 的，也就是说当窗口需要被显示时程序会等到该帧被完全显示，通常这取决于显示屏的刷新率，这会减少画面割裂的产生。而最后一种则是立即显示，这种情况下最能反应当前设备下能达到的最优帧率。虽然不一定好就是了。
+我们先获取了我们的`Surface`的`SurfaceCapabilities`，其中包含了我们的设备和平面支持的像素格式、呈现模式和alpha值模式。
+我们将`Surface`的帧缓冲配置为我们窗口的大小，并告诉他我们的帧缓冲可以用来当`RENDER_ATTACHMENT`，人话说就是可以当渲染目标的东西。然后给他挑了个他能用的像素格式。查询 `PresentMode` 的文档你会发现有多种模式，详情请参照文档。其中几种是 **垂直同步** 的，也就是说当窗口需要被显示时程序会等到该帧被完全显示，通常这取决于显示屏的刷新率，这会减少画面割裂的产生。而最后一种则是立即显示，这种情况下最能反应当前设备下能达到的最优帧率。虽然不一定好就是了。`view_formats`则规定了我们创建帧缓冲视图时可以使用哪些格式。是的，视图的格式可以和缓冲本身不同。但是我们通常只会用到格式相同的情况，而这种情况永远都是被支持的，所以我们留空就行了。
 
 这下真万事俱备了，但是我们还需要对我们的循环做一点小调整。
 
-```rust
+```rust,no_run
 event_loop.run(move |event, _, control_flow| {
     *control_flow = ControlFlow::Wait;
 
@@ -163,7 +173,7 @@ event_loop.run(move |event, _, control_flow| {
 
 这就是我们的代码将要做的。
 
-```rust
+```rust,no_run
 let output = surface.get_current_texture().unwrap();
 let view = output
     .texture
@@ -171,7 +181,7 @@ let view = output
 let mut encoder =
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 {
-    // 注意这个
+    // 注意这个 '{'
     let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: None,
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -197,8 +207,8 @@ output.present();
 
 然后，我们暂时不用进行别的渲染操作，所以我们让编码器创建了个命令缓冲，然后把它丢进了队列。
 
-__SO EZ!__
+**SO EZ!**
 
-~~当然，有些东西还是需要我们注意的。从`Surface`请求的帧缓冲的生命周期是被WGPU监视的，一旦其`drop()`被调用，它就会立刻尝试将其从渲染位置置换出来而显示出去。在一些复杂的项目中，如果不注意其生命周期，WGPU会进行panic，因此我们需要注意这一点。~~ __从`0.11`开始改为手动调用`SurfaceTexture::present()`__ 另外值得我们注意的是，为了内存安全需要，当然也是因为其内部操作的必要，`RenderPass` 内部保留着一个 `&mut CommandEncoder`，换而言之，我们的编码器的数据是流入`RenderPass`中的，因此我们需要稍微控制其生命周期，以防止Rust编译器对你狂暴鸿儒大量错误。这也是为什么我们打了一组看似多余的`{}`。
+~~当然，有些东西还是需要我们注意的。从`Surface`请求的帧缓冲的生命周期是被WGPU监视的，一旦其`drop()`被调用，它就会立刻尝试将其从渲染位置置换出来而显示出去。在一些复杂的项目中，如果不注意其生命周期，WGPU会进行panic，因此我们需要注意这一点。~~ **从`0.11`开始改为手动调用`SurfaceTexture::present()`** 另外值得我们注意的是，为了内存安全需要，当然也是因为其内部操作的必要，`RenderPass` 内部保留着一个 `&mut CommandEncoder`，换而言之，我们的编码器的数据是流入`RenderPass`中的，因此我们需要稍微控制其生命周期，以防止Rust编译器对你狂暴鸿儒大量错误。这也是为什么我们打了一组看似多余的`{}`。
 
 不出意外的话，我们的程序现在可以顺利运行，并且你会看到一片绿到发光的屏幕<mask>没有暗讽各位读者的意思，大概</mask>。于是，我们正式迈出了使用WGPU的第一步。不过请注意，我们激动人心的旅程才刚刚开始！

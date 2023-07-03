@@ -1,8 +1,8 @@
 # 引言
 
-__阅读本文需要[Rust](https://www.rust-lang.org)基础，以及一小部分[Rust Async](https://rust-lang.github.io/async-book/)的知识，未满足要求者请阅读[Rust Book](https://doc.rust-lang.org/book/)__
+**阅读本文需要[Rust](https://www.rust-lang.org)基础，以及一小部分[Rust Async](https://rust-lang.github.io/async-book/)的知识，未满足要求者请阅读[Rust Book](https://doc.rust-lang.org/book/)**
 
-> __警告：__ 切忌将本教程当作一本正经的教程，否则后果自负。文中笔者可能会使用模糊不清甚至粗俗的语言，若有不适，请适度阅读。
+> **警告：** 切忌将本教程当作一本正经的教程，否则后果自负。文中笔者可能会使用模糊不清甚至粗俗的语言，若有不适，请适度阅读。
 
 以上的话请务必不要当真。实话实说，Rust中称得上尽人意的**安全**图形库确实不多，其中的先锋gfx早已停止维护，转而进行[gfx-hal](https://github.com/gfx-rs/gfx)的开发<mask>然而后者现在也进入维护模式了，因为WGPU</mask>，vulkano的语法(主要是那些宏)及线程安全多少有些麻烦<mask>蛋疼</mask>，WGPU 称得上是为数不多安全，甚至线程安全，而又简便易用的图形库了。<small>你问我glium？<mask>~~GL，狗都不用~~</mask></small>
 

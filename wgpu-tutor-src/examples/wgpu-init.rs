@@ -1,3 +1,4 @@
+use pollster::FutureExt;
 use winit::event_loop::ControlFlow;
 
 fn main() -> anyhow::Result<()> {
@@ -6,31 +7,41 @@ fn main() -> anyhow::Result<()> {
         .with_title("Test Window")
         .build(&event_loop)?;
 
-    let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY); // 如果要在WSL里面使用，建议使用GL
-    let surface = unsafe { instance.create_surface(&window) };
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: Some(&surface),
-        force_fallback_adapter: false,
-    }))
-    .unwrap();
-    let (device, queue) = pollster::block_on(adapter.request_device(
-        &wgpu::DeviceDescriptor {
-            label: None,                  // 如果你给他起个名字，调试的时候可能比较有用
-            features: adapter.features(), // 根据需要的特性自行调整
-            limits: adapter.limits(),     // 根据需要的限定自行调整
-        },
-        None,
-    ))
-    .unwrap();
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::PRIMARY,
+        dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+    }); // 如果要在WSL里面使用，建议使用GL
+    let surface = unsafe { instance.create_surface(&window)? };
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        })
+        .block_on()
+        .unwrap();
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: None,                  // 如果你给他起个名字，调试的时候可能比较有用
+                features: adapter.features(), // 根据需要的特性自行调整
+                limits: adapter.limits(),     // 根据需要的限定自行调整
+            },
+            None,
+        )
+        .block_on()
+        .unwrap();
+
+    let capabilities = surface.get_capabilities(&adapter);
 
     let mut surface_config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_supported_formats(&adapter)[0],
+        format: capabilities.formats[0],
         width: window.inner_size().width,
         height: window.inner_size().height,
         present_mode: wgpu::PresentMode::AutoVsync,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
+        view_formats: vec![],
     };
 
     surface.configure(&device, &surface_config);
@@ -73,7 +84,7 @@ fn main() -> anyhow::Result<()> {
                 let mut encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
                 {
-                    // 注意这个
+                    // 注意这个 '{'
                     let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: None,
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
