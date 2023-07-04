@@ -12,6 +12,7 @@ edition = "2021"
 after = ["links"]
 
 [output.html]
+default-theme = "ayu"
 # mathjax-support = true
 git-repository-url = "https://github.com/switefaster/wgpu-tutor"
 site-url = "/wgpu-tutor/"

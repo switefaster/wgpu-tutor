@@ -38,6 +38,6 @@ fn main() {
 
 `EventLoop::run`接受`F: 'static + FnMut(Event<'_, T>, &EventLoopWindowTarget<T>, &mut ControlFlow)`作为回调函数。第一个参数显然是窗口发送的事件，第二个参数是可以`Deref`出`&EventLoop`的一个包装，主要方便用户在事件处理过程中创建新的窗口，而第三个参数负责控制窗口状态，用法例如`*control_flow = ControlFlow::Exit`。在一次回调结束后，winit会根据ControlFlow的值改变窗口的状态，比如关闭窗口等。<mask>一切都是borrow checker的选择</mask>
 
-> **提示**：开头的`#![windows_subsystem = "window"]`标签将会在Windows平台编译时将入口点改为`WINMAIN`，因而使得程序启动时不会弹出一个CMD。不需要的读者可以自行删去这一行。其他平台不会受到该标签的影响。
+> **提示：** 开头的`#![windows_subsystem = "window"]`标签将会在Windows平台编译时将入口点改为`WINMAIN`，因而使得程序启动时不会弹出一个CMD。不需要的读者可以自行删去这一行。其他平台不会受到该标签的影响。
 
 下一节，我们将会介绍如何处理窗口发送的事件，并且确定程序循环的主体。
