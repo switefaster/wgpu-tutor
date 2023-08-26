@@ -14,6 +14,8 @@
 
 > 本书使用了[mdbook-katex](https://github.com/lzanini/mdbook-katex)预处理器，但是后者暂未支持MSVC工具链。若有自行构建需求者，请注意安装。
 
+**注意：** 本书由于[mdBook的缺陷](https://github.com/rust-lang/mdBook/issues/1081)暂不支持中文内容搜索。我已做出[修复方案](https://github.com/rust-lang/mdBook/issues/1081#issuecomment-1621169175)但是目前无人表态。在我的提议被采用或者别的修复方案被采用之前，在搜索框输入中文是无效的。
+
 ### 自定义HTML脚标
 
 本书自定义了一些HTML脚标以方便一些样式的书写。

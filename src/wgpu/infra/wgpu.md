@@ -9,9 +9,13 @@
 
 **WGPU** 视其语境可以代指不同的对象。在Rust社区以及本文中，通常代指[wgpu-rs](https://github.com/gfx-rs/wgpu)。`wgpu-rs`是对`wgpu-core`的包装，后者是一个更加底层的包装层，负责直接与图形库底层进行交互。而`wgpu-core`又依赖于`wgpu-hal`，HAL是硬件抽象层(___Hardware Abstraction Layer___)的简称。顾名思义，HAL将各个图形库最核心的观念提取成了一个抽象层，并且后端由不同的底层库实现。这也是`wgpu-rs`得以在不改变代码的情况下改变运行底层的根本。不过由于其设计模式最接近于Vulkan，因此目前使用Vulkan底层才能得到最佳性能。
 
-事实上，WGPU名称的来源是[WebGPU](https://www.w3.org/TR/webgpu/)标准。后者旨在为Web环境提供一个可以调用硬件GPU进行渲染和计算的标准。它的标准是为JavaScript设计的，这也解释了WGPU库中偶尔出现的一两个`async`函数，以及为何WGPU支持WebAssembly。`wgpu-rs`是`WebGPU`对Rust用户的包装，而其后的`wgpu-core`则亦成为了各浏览器实现`WebGPU`功能的后端。
+事实上，WGPU名称的来源是[WebGPU](https://www.w3.org/TR/webgpu/)标准。后者旨在为Web环境提供一个可以调用硬件GPU进行渲染和计算的标准。它的标准是为JavaScript设计的，这也解释了WGPU库中偶尔出现的一两个`async`函数，以及为何WGPU支持WebAssembly。`wgpu-rs`是`WebGPU`对Rust用户的包装，而其后的`wgpu-core`则亦成为了一些浏览器实现`WebGPU`功能的后端（如 _FireFox_）。
 
 > wgpu-core曾经依赖的是gfx-hal。后者是一个基于Vulkan设计的硬件抽象层。后来，wgpu开发组发现gfx-hal对于wgpu而言过于冗余，于是贴合wgpu的需求开发了wgpu-hal。目前gfx-hal进入了维护模式。
+
+---
+
+> _Chrome_ 浏览器使用的WebGPU实现并非`wgpu-core`而是C++编写的[Dawn](https://dawn.googlesource.com/dawn)
 
 当然，在本书中，我们只会涉及到`wgpu-rs`的部分。
 
