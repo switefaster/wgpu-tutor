@@ -1,4 +1,4 @@
-FROM rust:slim-buster AS builder
+FROM rust:1.72.0-slim-buster AS builder
 RUN apt-get update && \
     apt-get install --no-install-recommends -y \
     musl-tools patch

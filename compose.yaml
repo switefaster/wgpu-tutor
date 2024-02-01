@@ -7,14 +7,14 @@ services:
     ports:
       - 3000:3000
       - 3001:3001
-    x-develop:
+    develop:
       watch:
         - path: theme/
-          action: rebuild
+          action: sync+restart
         - path: book.toml
-          action: rebuild
+          action: sync+restart
         - path: extra-style.css
-          action: rebuild
+          action: sync+restart
         - path: src/
           target: /book/src
           action: sync

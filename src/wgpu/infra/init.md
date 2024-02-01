@@ -15,8 +15,8 @@ resolver = "2" #!IMPORTANT 这对 wgpu >= 0.10 是必要的
 # UPDATE: 从rust edition 2021开始 resolver = 2 是缺省的
 
 [dependencies]
-winit = "0.28"
-wgpu = "0.16"
+winit = { version = "0.29", features = ["rwh_05"], default-features = false }
+wgpu = "0.18"
 pollster = "0.3"
 ```
 
@@ -32,22 +32,23 @@ pollster = "0.3"
 use pollster::FutureExt; // 有了这个我们就可以对任意Future使用block_on()了
 
 fn main() {
-    let event_loop = winit::event_loop::EventLoop::new();
+    let event_loop = winit::event_loop::EventLoop::new()?;
     let window = winit::window::WindowBuilder::new()
         .with_title("Test Window")
-        .build(&event_loop)
-        .unwrap();
+        .build(&event_loop)?;
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::PRIMARY,
         dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
-    }); // 如果要在WSL里面使用，建议使用GL
+        flags: wgpu::InstanceFlags::default(),
+        gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+    });
 
     // ...
 }
 ```
 
-`wgpu::InstanceDescriptor`描述了我们需要创建的实例的基本信息。`wgpu::Backends`是一个`BitSet`，每个不同的位表示了尝试使用这个后端(_1_)与否(_0_)。当然，如果你全选了WGPU通常会根据你的系统自动帮你挑一个，有需要的就自己指定吧。`dx12_shader_compiler`则指定由`DirectX`使用的着色器语言`HLSL`的编译器。我们通篇都会使用`WGSL`，也不需要特殊的`HLSL`配置，便可以选择自带的`Fxc`。接下来，我们有了实例，该获取`Surface`了
+`wgpu::InstanceDescriptor`描述了我们需要创建的实例的基本信息。`wgpu::Backends`是一个`BitSet`，每个不同的位表示了尝试使用这个后端(_1_)与否(_0_)。当然，如果你全选了WGPU通常会根据你的系统自动帮你挑一个，有需要的就自己指定吧。剩下的字段请读者自行翻看文档，我们不是很关心，所以都使用默认值即可。接下来，我们有了实例，该获取`Surface`了
 
 ```rust,no_run
 // ...
@@ -121,8 +122,8 @@ surface.configure(&device, &surface_config);
 这下真万事俱备了，但是我们还需要对我们的循环做一点小调整。
 
 ```rust,no_run
-event_loop.run(move |event, _, control_flow| {
-    *control_flow = ControlFlow::Wait;
+event_loop.run(move |event, target| {
+    target.set_control_flow(ControlFlow::Wait);
 
     match event {
         winit::event::Event::WindowEvent { event, window_id } if window.id() == window_id => {
@@ -132,31 +133,21 @@ event_loop.run(move |event, _, control_flow| {
                         surface_config.width = new_size.width;
                         surface_config.height = new_size.height;
                         surface.configure(&device, &surface_config);
-                    }
+                        }
                 }
-                winit::event::WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                winit::event::WindowEvent::ScaleFactorChanged {
-                    new_inner_size: new_size,
-                    ..
-                } => {
-                    if new_size.width > 0 && new_size.height > 0 {
-                        surface_config.width = new_size.width;
-                        surface_config.height = new_size.height;
-                        surface.configure(&device, &surface_config);
-                    }
+                winit::event::WindowEvent::CloseRequested => target.exit(),
+                winit::event::WindowEvent::RedrawRequested => {
+                    // 在这渲染
                 }
                 _ => (),
             }
         }
-        winit::event::Event::MainEventsCleared => {
+        winit::event::Event::AboutToWait => {
             window.request_redraw();
-        }
-        winit::event::Event::RedrawRequested(_) => {
-            // 在这渲染  
         }
         _ => (),
     }
-});
+}).unwrap();
 ```
 
 上面的代码，说人话，就是在窗口大小变化的时候重新配置一下咱们的`Surface`。熟悉了渲染流程的读者可能已经猜到，如果不这么做，很有可能导致巨大的窗口上只寥寥显示了几个巨大的像素的惨剧……
@@ -178,23 +169,26 @@ let output = surface.get_current_texture().unwrap();
 let view = output
     .texture
     .create_view(&wgpu::TextureViewDescriptor::default());
-let mut encoder =
-    device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+let mut encoder = device
+    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 {
-    // 注意这个 '{'
-    let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: None,
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: &view,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                store: true,
-            },
-        })],
-        depth_stencil_attachment: None,
-    });
-}
+                            // 注意这个 '{'
+    let _render_pass =
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+    }
 queue.submit(std::iter::once(encoder.finish()));
 output.present();
 ```

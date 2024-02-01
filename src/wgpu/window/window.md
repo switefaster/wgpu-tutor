@@ -8,7 +8,8 @@
 # Cargo.toml
 # ...
 [dependencies]
-winit = "0.28"
+winit = { version = "0.29", features = ["rwh_05"], default-features = false }
+# wgpu 0.18 的 RawWindowHandle 版本是 0.5。如果有编译失败，可以试试 cargo update 然后再试试
 ```
 
 然后创建窗口
@@ -17,14 +18,16 @@ winit = "0.28"
 #![windows_subsystem = "window"]
 
 fn main() {
-    let event_loop = winit::event_loop::EventLoop::new();
-    let _window = winit::window::WindowBuilder::new()
+    let event_loop = winit::event_loop::EventLoop::new().unwrap();
+    let window = winit::window::WindowBuilder::new()
         .with_title("标题")
-        .build(&event_loop)
-        .unwrap();
-    event_loop.run(move |_event, _, _control_flow| {
-        todo!()
-    });
+        .build(&event_loop).unwrap();
+
+    event_loop.run(move |event, target| match event {
+        _ => (),
+    }).unwrap();
+
+    Ok(())
 }
 ```
 
@@ -36,7 +39,7 @@ fn main() {
 
 `winit::window::Window`便是窗口的主体了，主要负责保管窗口句柄，窗口大小，光标位置等的数据，具体可以设置以及获取的数据请参见[Window的文档](https://docs.rs/winit/latest/winit/window/struct.Window.html)和[WindowBuilder的文档](https://docs.rs/winit/latest/winit/window/struct.WindowBuilder.html)。值得一提的是`Window`实现了`HasRawWindowHandle`，所以可以直接将`&Window`作为各类图形库的窗口句柄输入。
 
-`EventLoop::run`接受`F: 'static + FnMut(Event<'_, T>, &EventLoopWindowTarget<T>, &mut ControlFlow)`作为回调函数。第一个参数显然是窗口发送的事件，第二个参数是可以`Deref`出`&EventLoop`的一个包装，主要方便用户在事件处理过程中创建新的窗口，而第三个参数负责控制窗口状态，用法例如`*control_flow = ControlFlow::Exit`。在一次回调结束后，winit会根据ControlFlow的值改变窗口的状态，比如关闭窗口等。<mask>一切都是borrow checker的选择</mask>
+`EventLoop::run`接受`F: FnMut(Event<T>, &EventLoopWindowTarget<T>),`作为回调函数。第一个参数显然是窗口发送的事件，第二个参数是允许控制窗口状态和进行窗口操作的对象。在其中，你可以关闭窗口，设置窗口的等待状态，甚至创建新的窗口。我们暂时没有使用它，但是在下一章中我们会用它对一些窗口事件做出响应。
 
 > **提示：** 开头的`#![windows_subsystem = "window"]`标签将会在Windows平台编译时将入口点改为`WINMAIN`，因而使得程序启动时不会弹出一个CMD。不需要的读者可以自行删去这一行。其他平台不会受到该标签的影响。
 

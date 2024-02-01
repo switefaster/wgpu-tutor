@@ -23,6 +23,8 @@
 
 虽然在二维渲染中我们并不需要处理太多坐标系相关的内容，但是我们已经有了展示顶点着色器作用的绝佳例子了！在通常的二维渲染中，我们需要以像素为单位描述位置，然而这在NDC中是不好做到的。抛开其他的不谈，如果我们采用一个固定的坐标，就会导致我们的图形随着窗口缩放而拉伸。如果我们想要一个固定的大小，就需要我们反复地计算像素宽度对应的NDC宽度。想象一下如果我们有成千上万个（其实通常可以比这更多）图形需要渲染，那我们就需要每一帧计算成千上万的坐标然后将其重新上传至GPU，低效不堪。然而稍微一想，我们就会发现端倪：渲染过程的最后无非是GPU统一把NDC坐标线性变换到视口（在我们的情况下是窗口）中，那我们先让GPU统一进行其逆变换不就可以了吗？顶点着色器就担任了这个对一些顶点统一进行变换的作用。听上去要算的东西还是差不多的，为什么我们更喜欢这样做呢？一是因为这样可以大幅减少CPU和GPU之间相对比较慢的数据交换，因为我们的顶点数据和变换用的数据都可以存在GPU中；二是因为GPU的硬件是对矩阵乘法特化的（不知道为什么和矩阵乘法扯上关系？下一个大章节你就知道了）。这个说法有个地方听上去有些弱智：既然我们本来就想直接输出到窗口坐标，为什么还要有一个NDC呢？在二维渲染的语境下，我没有想到什么为其开脱的理由。但是在三维渲染中，我们将会轻易注意到其重要地位。
 
+> 因为我不想翻转坐标，所以下面像素坐标都是以屏幕左下角为原点，向上为$\hat{y}$，向右为$\hat{x}$
+
 我们还是先实现再说吧！先考虑我们需要什么样一个矩阵进行变换。假设我们窗口的宽度是$w$，高度是$h$（像素），而一个像素的坐标是$\left(x_p, y_p\right)$。这个像素最终应该到达的NDC中的位置记为$\left(x_{NDC},y_{NDC}\right)$，则有：
 
 $$
@@ -35,6 +37,8 @@ $$
 是一个缩放加上平移。但平移并不是一个线性变换，这怎么办呢？
 
 > 下面是给有线代基础同学的数学内容，不感兴趣可以选择[跳过](#下课)
+
+---
 
 ### 理塘DJ的完美数学教室
 
@@ -104,6 +108,8 @@ $$
 
 这便是我们最终需要使用的矩阵了！
 
+---
+
 ### 下课
 
 给跳过的同学贴上省流版本：我们只需要将这个矩阵
@@ -125,6 +131,8 @@ $$
 
 上，就能在前两个分量中得到我们想要的结果。其中$z$的值随意，但是由于NDC的$\hat{z}$取值范围不能超过$\left[0,1\right]$，这里的$z$也不可以超过$\left[0,1\right]$。
 
+## 实操时间
+
 为了方便在程序中操作矩阵，我们引入一个新的依赖
 
 ```toml
@@ -134,3 +142,93 @@ $$
 # ...
 cgmath = "0.18"
 ```
+
+然后在初始化代码中的某一段生成矩阵并把它写入缓冲
+
+```rust,no_run
+/*
+let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    label: None,
+    contents: bytemuck::cast_slice(&triangle),
+    usage: wgpu::BufferUsages::VERTEX,
+});
+*/
+
+let window_dimension = window.inner_size();
+
+let pixel_matrix = cgmath::Matrix4::new(
+    2.0 as f32 / window_dimension.width as f32,
+    0.,
+    0.,
+    0.,
+    0.,
+    2.0 / window_dimension.height as f32,
+    0.,
+    0.,
+    0.,
+    0.,
+    1.,
+    0.,
+    -1.,
+    -1.,
+    0.,
+    1.,
+);
+
+// 虽然我们最终还是把矩阵转成了二维数组，但是反正我们迟早需要在CPU里面计算矩阵乘法，不如早点引入cgmath
+let projection_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    label: None,
+    contents: bytemuck::cast_slice(&<cgmath::Matrix4<f32> as Into<[[f32; 4]; 4]>>::into(
+        pixel_matrix,
+    )),
+    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+});
+```
+
+> `cgmath`的内部存储结构和输入时的顺序都是 **列优先(_Column Major_)** 的，和WGPU一致。换句话说，我们输入的数字四个四个分为一组分别为第一列到第四列。如果你把它每四个换一行看，那看到的就是我们需要的矩阵的转置。这个比较误导人，请务必注意！
+
+注意到我们的缓冲的用途是`wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST`。前者告诉WGPU我们的缓冲将会用于向着色器内传递至少在一次渲染调用内保持不变的数据，后者则允许我们在必要时更新缓存的内容：例如窗口大小变化时。
+
+接下来，我们需要想办法将数据传递进着色器中。还记得上一节基本留空的管线布局(_Pipeline Layout_)吗？我们提到过向着色器传入数据和它有关。准确的说，和其中的绑定组(_Bind Group_)有关。
+
+绑定组存在的目的是向着色器传递在一次或者一次以上绘制请求之间不变的数据（与顶点数据不同）。为了顺利传递一个绑定组，我们需要如下操作：
+
+- 初始化时
+  - 创建绑定组布局(_Bind Group Layout_)
+  - 创建拥有绑定组布局引用的管线布局
+  - 创建拥有对应绑定组布局的管线
+  - 创建绑定组
+- 渲染时
+  - 使用对应的管线
+  - 将绑定组设置到对应槽位
+  - 发起渲染请求
+
+那么我们便开始吧。我们先创建好绑定组布局和绑定组
+
+```rust,no_run
+let matrix_bind_group_layout =
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+
+let matrix_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    label: None,
+    layout: &matrix_bind_group_layout,
+    entries: &[wgpu::BindGroupEntry {
+        binding: 0,
+        resource: projection_buffer.as_entire_binding(),
+    }],
+});
+```
+
+如你所见，我们的绑定组布局和绑定组都拥有多个入口点(_entry_)，而且他们得是对应的。这就是说，一个绑定组可以同时传入多种不同的数据。因此，我们可以用绑定组将一些永远同时出现的数据放在一起传入（比如渲染一个物体时，我们可以将其姿态和材质放在同一个绑定组传入）。每个不管是绑定组布局还是绑定组， _entry_ 都拥有一个`binding`字段，其指示着色器之后将索引该绑定组里面的数据，我们之后将会看到这一点。
