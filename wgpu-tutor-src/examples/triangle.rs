@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
         .build(&event_loop)?;
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
-    let surface = unsafe { instance.create_surface(&window)? };
+    let surface = instance.create_surface(&window)?;
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -27,9 +27,9 @@ fn main() -> anyhow::Result<()> {
         .unwrap();
     let (device, queue) = pollster::block_on(adapter.request_device(
         &wgpu::DeviceDescriptor {
-            label: None,                  // 如果你给他起个名字，调试的时候可能比较有用
-            features: adapter.features(), // 根据需要的特性自行调整
-            limits: adapter.limits(),     // 根据需要的限定自行调整
+            label: None,                           // 如果你给他起个名字，调试的时候可能比较有用
+            required_features: adapter.features(), // 根据需要的特性自行调整
+            required_limits: adapter.limits(),     // 根据需要的限定自行调整
         },
         None,
     ))
@@ -45,6 +45,7 @@ fn main() -> anyhow::Result<()> {
         present_mode: wgpu::PresentMode::AutoVsync,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
         view_formats: vec![],
+        desired_maximum_frame_latency: 2,
     };
 
     surface.configure(&device, &surface_config);
@@ -108,7 +109,7 @@ fn main() -> anyhow::Result<()> {
         multiview: None,
     });
 
-    event_loop.run(move |event, target| {
+    event_loop.run(|event, target| {
         target.set_control_flow(ControlFlow::Wait);
 
         match event {

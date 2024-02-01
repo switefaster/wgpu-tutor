@@ -15,8 +15,8 @@ resolver = "2" #!IMPORTANT 这对 wgpu >= 0.10 是必要的
 # UPDATE: 从rust edition 2021开始 resolver = 2 是缺省的
 
 [dependencies]
-winit = { version = "0.29", features = ["rwh_05"], default-features = false }
-wgpu = "0.18"
+winit = "0.29"
+wgpu = "0.19"
 pollster = "0.3"
 ```
 
@@ -52,7 +52,7 @@ fn main() {
 
 ```rust,no_run
 // ...
-let surface = unsafe { instance.create_surface(&window).unwrap() };
+let surface = instance.create_surface(&window).unwrap();
 let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(&surface),
@@ -62,9 +62,7 @@ let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
     .unwrap();
 ```
 
-等等等等，不妙啊，怎么会出现`unsafe`呢？大可放心，这个`unsafe`只是警告你要保证`Surface`存活期间`RawWindowHandle`是有效的。`winit`会帮我们保证这个，我们就甭管了:P。
-
-同时我们还接着获取了适配器，`request_adapter`这个函数会让`Instance`帮你挑一个满足你要求的适配器。好像参数也没啥好解释的……`wgpu::PowerPreference`会决定WGPU倾向于选择独显还是集显，看你咯。
+我们接着获取适配器，`request_adapter`这个函数会让`Instance`帮你挑一个满足你要求的适配器。好像参数也没啥好解释的……`wgpu::PowerPreference`会决定WGPU倾向于选择独显还是集显，看你咯。
 
 当然，如果你想自己枚举适配器，也是可以的。方法大致如下：
 
@@ -85,8 +83,8 @@ let adapter = instance
 let (device, queue) = adapter.request_device(
         &wgpu::DeviceDescriptor {
             label: None,                  // 如果你给他起个名字，调试的时候可能比较有用
-            features: adapter.features(), // 根据需要的特性自行调整
-            limits: adapter.limits(),     // 根据需要的限定自行调整
+            required_features: adapter.features(), // 根据需要的特性自行调整
+            required_limits: adapter.limits(),     // 根据需要的限定自行调整
         },
         None,
     )
@@ -111,18 +109,19 @@ let mut surface_config = wgpu::SurfaceConfiguration {
         present_mode: wgpu::PresentMode::AutoVsync,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
         view_formats: vec![],
+        desired_maximum_frame_latency: 2,
     };
 
 surface.configure(&device, &surface_config);
 ```
 
 我们先获取了我们的`Surface`的`SurfaceCapabilities`，其中包含了我们的设备和平面支持的像素格式、呈现模式和alpha值模式。
-我们将`Surface`的帧缓冲配置为我们窗口的大小，并告诉他我们的帧缓冲可以用来当`RENDER_ATTACHMENT`，人话说就是可以当渲染目标的东西。然后给他挑了个他能用的像素格式。查询 `PresentMode` 的文档你会发现有多种模式，详情请参照文档。其中几种是 **垂直同步** 的，也就是说当窗口需要被显示时程序会等到该帧被完全显示，通常这取决于显示屏的刷新率，这会减少画面割裂的产生。而最后一种则是立即显示，这种情况下最能反应当前设备下能达到的最优帧率。虽然不一定好就是了。`view_formats`则规定了我们创建帧缓冲视图时可以使用哪些格式。是的，视图的格式可以和缓冲本身不同。但是我们通常只会用到格式相同的情况，而这种情况永远都是被支持的，所以我们留空就行了。
+我们将`Surface`的帧缓冲配置为我们窗口的大小，并告诉他我们的帧缓冲可以用来当`RENDER_ATTACHMENT`，人话说就是可以当渲染目标的东西。然后给他挑了个他能用的像素格式。查询 `PresentMode` 的文档你会发现有多种模式，详情请参照文档。其中几种是 **垂直同步** 的，也就是说当窗口需要被显示时程序会等到该帧被完全显示，通常这取决于显示屏的刷新率，这会减少画面割裂的产生。而最后一种则是立即显示，这种情况下最能反应当前设备下能达到的最优帧率。虽然不一定好就是了。`view_formats`则规定了我们创建帧缓冲视图时可以使用哪些格式。而`desired_maximum_frame_latency`则会决定交换链将提前渲染多少帧的内容，我们这里设为`2`，那么交换链维护的样子就是我们上章所示了。是的，视图的格式可以和缓冲本身不同。但是我们通常只会用到格式相同的情况，而这种情况永远都是被支持的，所以我们留空就行了。
 
 这下真万事俱备了，但是我们还需要对我们的循环做一点小调整。
 
 ```rust,no_run
-event_loop.run(move |event, target| {
+event_loop.run(|event, target| {
     target.set_control_flow(ControlFlow::Wait);
 
     match event {

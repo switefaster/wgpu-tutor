@@ -5,7 +5,7 @@
 我们先来看一个例子
 
 ```rust,no_run
-event_loop.run(move |event, target| match event {
+event_loop.run(|event, target| match event {
         Event::DeviceEvent { event, .. } => {
             unimplemented!()
         },

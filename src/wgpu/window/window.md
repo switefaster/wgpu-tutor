@@ -8,8 +8,7 @@
 # Cargo.toml
 # ...
 [dependencies]
-winit = { version = "0.29", features = ["rwh_05"], default-features = false }
-# wgpu 0.18 的 RawWindowHandle 版本是 0.5。如果有编译失败，可以试试 cargo update 然后再试试
+winit = "0.29"
 ```
 
 然后创建窗口
@@ -23,7 +22,7 @@ fn main() {
         .with_title("标题")
         .build(&event_loop).unwrap();
 
-    event_loop.run(move |event, target| match event {
+    event_loop.run(|event, target| match event {
         _ => (),
     }).unwrap();
 

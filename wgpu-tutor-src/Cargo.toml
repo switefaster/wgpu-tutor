@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 
 [dev-dependencies]
-winit = { version = "0.29", features = ["rwh_05"], default-features = false }
-wgpu = "0.18"
+winit = "0.29"
+wgpu = "0.19.1"
 pollster = "0.3"
 anyhow = "1"
 bytemuck = { version = "1", features = ["derive"] }

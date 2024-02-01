@@ -143,16 +143,37 @@ $$
 cgmath = "0.18"
 ```
 
+我们先更新一下我们的顶点数据：
+
+```rust,no_run
+let triangle = [
+    Vertex {
+        position: [50.0, 100.0],
+        color: [1.0, 1.0, 1.0],
+    },
+    Vertex {
+        position: [0.0, 0.0],
+        color: [1.0, 1.0, 1.0],
+    },
+    Vertex {
+        position: [100.0, 0.0],
+        color: [1.0, 1.0, 1.0],
+    },
+];
+```
+
+记住，经过我们的操作后，我们现在采取的是窗口的像素坐标：原点在窗口左下角，单位为像素。因此，这个三角形是一个顶点位于窗口左下角，底边贴着窗口底边，底为100像素，高为100像素的白色三角形。
+
 然后在初始化代码中的某一段生成矩阵并把它写入缓冲
 
 ```rust,no_run
-/*
 let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
     label: None,
     contents: bytemuck::cast_slice(&triangle),
     usage: wgpu::BufferUsages::VERTEX,
 });
-*/
+
+// 从这里继续
 
 let window_dimension = window.inner_size();
 
@@ -231,4 +252,144 @@ let matrix_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
 });
 ```
 
-如你所见，我们的绑定组布局和绑定组都拥有多个入口点(_entry_)，而且他们得是对应的。这就是说，一个绑定组可以同时传入多种不同的数据。因此，我们可以用绑定组将一些永远同时出现的数据放在一起传入（比如渲染一个物体时，我们可以将其姿态和材质放在同一个绑定组传入）。每个不管是绑定组布局还是绑定组， _entry_ 都拥有一个`binding`字段，其指示着色器之后将索引该绑定组里面的数据，我们之后将会看到这一点。
+如你所见，我们的绑定组布局和绑定组都拥有多个条目(_entry_)，而且他们得是对应的。这就是说，一个绑定组可以同时传入多种不同的数据。因此，我们可以用绑定组将一些永远同时出现的数据放在一起传入（比如渲染一个物体时，我们可以将其姿态和材质放在同一个绑定组传入）。每个不管是绑定组布局还是绑定组， _entry_ 都拥有一个`binding`字段，其指示着色器之后将索引该绑定组里面的数据，我们之后将会看到这一点。
+
+太棒了，现在我们可以更新我们的管线布局来告诉WGPU我们想要在使用这个管线时传入这一种绑定组了：
+
+```rust,no_run
+let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+    label: None,
+    bind_group_layouts: &[&matrix_bind_group_layout], // 改动了这里
+    push_constant_ranges: &[],
+});
+```
+
+### 数组顺序
+
+尽管我们这里并不需要传入多个绑定组布局，但是我仍需要提醒的是，在传入多个绑定组布局时，`bind_group_layouts`中元素的顺序必须和绑定组的槽位编号一致。之后我们需要用传入多个绑定组时会再强调这一点。
+
+也别忘了更新我们的着色器：
+
+```rust,no_run
+let shader_module =
+    device.create_shader_module(wgpu::include_wgsl!("triangle/triangle-pixel.wgsl"));
+```
+
+渲染管线本身的创造则并没有什么需要改动的地方。
+
+最后在渲染之前记得设置一下绑定组
+
+```rust,no_run
+let mut render_pass =
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: None,
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+        view: &view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+    });
+render_pass.set_pipeline(&pipeline);
+render_pass.set_vertex_buffer(0, vertices_buffer.slice(..));
+render_pass.set_bind_group(0, &matrix_bind_group, &[]); // 在这里绑定
+render_pass.draw(0..3, 0..1);
+```
+
+设置绑定组的第一个参数是绑定组的槽位，和[这里所说](#数组顺序)是对应的，第二个参数是对绑定组的引用（注意不是布局，只有绑定组本身才负责掌管具体的数据），第三个参数则是动态偏移需要的，我们用不到。
+
+原则上只要在你更新了着色器的内容（在下文）以后，我们的渲染其实已经符合我们的预期了：我们会看到一个贴在屏幕左下角的，底边和高都是100像素的三角形。然而一旦窗口的大小发生变化，我们的矩阵也是需要更新的：因为它的值依赖于窗口的长和宽。为了无论如何缩放窗口，我们都能有正确的三角形大小，我们需要的合适的时候更新矩阵缓冲的内容。而这个更新，正应该发生在窗口大小缩放时：
+
+```rust,no_run
+winit::event::WindowEvent::Resized(new_size) => {
+    if new_size.width > 0 && new_size.height > 0 {
+        surface_config.width = new_size.width;
+        surface_config.height = new_size.height;
+        surface.configure(&device, &surface_config);
+
+        // 新增内容
+        let pixel_matrix = cgmath::Matrix4::new(
+            2.0 as f32 / new_size.width as f32,
+            0.,
+            0.,
+            0.,
+            0.,
+            2.0 / new_size.height as f32,
+            0.,
+            0.,
+            0.,
+            0.,
+            1.,
+            0.,
+            -1.,
+            -1.,
+            0.,
+            1.,
+        );
+        queue.write_buffer(
+            &projection_buffer,
+            0,
+            bytemuck::cast_slice(&<cgmath::Matrix4<f32> as Into<
+                [[f32; 4]; 4],
+            >>::into(
+                pixel_matrix
+            )),
+        );
+    }
+}
+```
+
+几乎就是我们创造矩阵缓冲时代码的翻版。`Queue::write_buffer`会在当前队列的最开始，也就是下一次渲染开始之前，插入一条上传缓冲的指令。它的第一个参数是需要写入的缓冲的引用，第二条是写入位置从缓冲开始位置的偏移值（这个参数是为了方便局部更新），第三个参数是需要写入的字节数据。
+
+最后我们来看一下着色器需要有什么变化：
+
+```wgsl
+// triangle/triangle-pixel.wgsl
+
+struct VertexOut {
+    @builtin(position) position: vec4<f32>,
+    @location(0) color: vec3<f32>,
+}
+
+@group(0)
+@binding(0)
+var<uniform> u_projection: mat4x4<f32>;
+
+@vertex
+fn vs_main(@location(0) position: vec2<f32>, @location(1) color: vec3<f32>) -> VertexOut {
+    var out: VertexOut;
+    out.position = u_projection * vec4<f32>(position, 0.0, 1.0);
+    out.color = color;
+    return out;
+}
+
+@fragment
+fn fs_main(pin: VertexOut) -> @location(0) vec4<f32> {
+    return vec4<f32>(pin.color, 1.0);
+}
+```
+
+我们仍然暂时忽略在上一节便出现过的各种`@location`和`@builtin`，因为这是下一节的内容，而把注意力集中在多出来的部分。首先我们可以注意到的改动是
+
+```wgsl
+@group(0)
+@binding(0)
+var<uniform> u_projection: mat4x4<f32>;
+```
+
+这一部分会负责接收从绑定组传来的数据。`@group(0)`表示我们的绑定组会从槽位`0`被传入，与[这里所说](#数组顺序)对应，也和`render_pass.set_bind_group`的参数对应。而`@binding(0)`则表示我们接收到这个变量的数据是这个绑定组的第`0`个条目。由于我们从槽位`0`传入的绑定组的布局是入口点`0`为一个缓冲，着色器会尝试将这个缓冲理解为我们下面指定的类型。接下来的`var<uniform>`则告诉着色器接下来定义的变量是从绑定组接收的数据，这和GLSL中的`uniform`意义一致。然后我们定义其名称为`u_projection`，类型为`mat4x4<f32>`，也就是内容是`f32`的$4\times 4$矩阵。变量名字是可以随意起的。在接下来几个章节，我们将会面对条目越来越多的绑定组，也会同时用到多个绑定组。
+
+总的来说，这一段就是在表示：我要用第`0`绑定组的第`0`个条目的数据，而且要把那一段内存理解成$4\times 4$的单精度浮点矩阵。而经过这一番操作，我们在程序中传入的矩阵就可以在着色器中被使用了，而我们的用法也很简单，就是像前文说的那样，把它乘到顶点坐标上而已。
+
+```wgsl
+out.position = u_projection * vec4<f32>(position, 0.0, 1.0);
+```
+
+真不错！
+
+现在，你窗口的左下角有了一个大小不变而且死皮赖脸贴着窗口的小三角形了。你肯定早已注意到我们的顶点数据中有着描述颜色的字段，而你肯定充满了好奇：三个顶点的颜色，怎么能决定整个三角形每个像素的颜色？同时，我们的着色器中还充斥着各种神奇的标记，我们还没对它们做出任何解释。不用怕，一切都会在下一节真相大白！**拖更道，堂堂连载！**
