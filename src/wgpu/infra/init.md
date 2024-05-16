@@ -15,8 +15,8 @@ resolver = "2" #!IMPORTANT 这对 wgpu >= 0.10 是必要的
 # UPDATE: 从rust edition 2021开始 resolver = 2 是缺省的
 
 [dependencies]
-winit = "0.29"
-wgpu = "0.19"
+winit = "0.30"
+wgpu = "0.20"
 pollster = "0.3"
 ```
 
@@ -31,11 +31,12 @@ pollster = "0.3"
 ```rust,no_run
 use pollster::FutureExt; // 有了这个我们就可以对任意Future使用block_on()了
 
-fn main() {
-    let event_loop = winit::event_loop::EventLoop::new()?;
-    let window = winit::window::WindowBuilder::new()
-        .with_title("Test Window")
-        .build(&event_loop)?;
+fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+    let window = Arc::new(
+        event_loop
+            .create_window(winit::window::Window::default_attributes().with_title("窗口标题"))
+            .unwrap(),
+    );
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::PRIMARY,
@@ -52,8 +53,9 @@ fn main() {
 
 ```rust,no_run
 // ...
-let surface = instance.create_surface(&window).unwrap();
-let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+let surface = instance.create_surface(window.clone()).unwrap();
+let adapter = instance
+    .request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(&surface),
         force_fallback_adapter: false,
@@ -80,9 +82,10 @@ let adapter = instance
 好，底层干部基本就位了，接下来我们就要请出我们的一线工人`Queue`和`Device`。
 
 ```rust,no_run
-let (device, queue) = adapter.request_device(
+let (device, queue) = adapter
+    .request_device(
         &wgpu::DeviceDescriptor {
-            label: None,                  // 如果你给他起个名字，调试的时候可能比较有用
+            label: None,                           // 如果你给他起个名字，调试的时候可能比较有用
             required_features: adapter.features(), // 根据需要的特性自行调整
             required_limits: adapter.limits(),     // 根据需要的限定自行调整
         },
@@ -101,7 +104,7 @@ let (device, queue) = adapter.request_device(
 ```rust,no_run
 let capabilities = surface.get_capabilities(&adapter);
 
-let mut surface_config = wgpu::SurfaceConfiguration {
+let surface_config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: capabilities.formats[0],
         width: window.inner_size().width,
@@ -121,32 +124,40 @@ surface.configure(&device, &surface_config);
 这下真万事俱备了，但是我们还需要对我们的循环做一点小调整。
 
 ```rust,no_run
-event_loop.run(|event, target| {
-    target.set_control_flow(ControlFlow::Wait);
-
-    match event {
-        winit::event::Event::WindowEvent { event, window_id } if window.id() == window_id => {
-            match event {
-                winit::event::WindowEvent::Resized(new_size) => {
-                    if new_size.width > 0 && new_size.height > 0 {
-                        surface_config.width = new_size.width;
-                        surface_config.height = new_size.height;
-                        surface.configure(&device, &surface_config);
-                        }
+fn window_event(
+    &mut self,
+    event_loop: &winit::event_loop::ActiveEventLoop,
+    window_id: winit::window::WindowId,
+    event: winit::event::WindowEvent,
+) {
+    if let Some(Application {
+        window,
+        surface,
+        surface_config,
+        device,
+        queue,
+    }) = &mut self.app
+    {
+        if window.id() != window_id {
+            return;
+        }
+        match event {
+            winit::event::WindowEvent::CloseRequested => event_loop.exit(),
+            winit::event::WindowEvent::Resized(new_size) => {
+                if new_size.width > 0 && new_size.height > 0 {
+                    surface_config.width = new_size.width;
+                    surface_config.height = new_size.height;
+                    surface.configure(&device, &surface_config);
                 }
-                winit::event::WindowEvent::CloseRequested => target.exit(),
-                winit::event::WindowEvent::RedrawRequested => {
-                    // 在这渲染
-                }
-                _ => (),
             }
+            winit::event::WindowEvent::RedrawRequested => {
+                // 渲染代码
+                window.request_redraw();
+            }
+            _ => (),
         }
-        winit::event::Event::AboutToWait => {
-            window.request_redraw();
-        }
-        _ => (),
     }
-}).unwrap();
+}
 ```
 
 上面的代码，说人话，就是在窗口大小变化的时候重新配置一下咱们的`Surface`。熟悉了渲染流程的读者可能已经猜到，如果不这么做，很有可能导致巨大的窗口上只寥寥显示了几个巨大的像素的惨剧……

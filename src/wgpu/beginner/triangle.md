@@ -50,6 +50,8 @@ struct Vertex {
 接下来，让我们进行一个三角形的编：
 
 ```rust,no_run
+// resumed
+
 let triangle = [
     Vertex {
         position: [0.0, 0.5],

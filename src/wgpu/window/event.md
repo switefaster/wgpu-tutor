@@ -5,42 +5,39 @@
 我们先来看一个例子
 
 ```rust,no_run
-event_loop.run(|event, target| match event {
-        Event::DeviceEvent { event, .. } => {
-            unimplemented!()
-        },
-        Event::WindowEvent {
-            event,
-            window_id,
-        } if window_id == window.id() =>
-            match event {
-                WindowEvent::CloseRequested => target.exit(),
-                WindowEvent::Resized(physical_size) => {
-                    resize(physical_size);
-                }
-                WindowEvent::RedrawRequested(_) => {
-                    render();
-                }
-                _ => {}
-            },
-        Event::AboutToWait => {
-            window.request_redraw();
-        },
-        _ => {}
-    }).unwrap();
+fn window_event(
+    &mut self,
+    event_loop: &winit::event_loop::ActiveEventLoop,
+    window_id: winit::window::WindowId,
+    event: winit::event::WindowEvent,
+) {
+    if let Some(Application { window }) = &mut self.app {
+        if window.id() != window_id {
+            return;
+        }
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(physical_size) => {
+                resize(physical_size);
+            }
+            WindowEvent::RedrawRequested(_) => {
+                render();
+                window.request_redraw();
+            }
+            _ => (),
+        }
+    }
+}=
 ```
 
 这是一个渲染程序最基础的循环，现在我们来逐个分析这个回调中干了什么
 
-首先，我们用`match event {...}`来匹配事件，其中处理了四种事件：
+首先，我们用`match event {...}`来匹配事件，其中处理了三种事件：
 
-- `Event::DeviceEvent` 是 `Event` 的子事件，负责传递设备相关的信息，例如 **鼠标移动** **鼠标点击** **键盘按键** 等
-- `Event::WindowEvent` 是 `Event` 的子事件，负责传递窗口相关的信息，例如 **窗口缩放** **窗口移动** 等等，我们顺便在这把对窗口的关闭请求处理了，$\times$终于有了用武之地
-  - `WindowEvent::RedrawRequested` 事件会在窗口被要求重新绘制窗口内容时被调用，这也将会是渲染部分被调用的位置
-- `Event::AboutToWait` 事件会在事件队列中的事件清空时被调用，我们在此进行一次重绘要求，这样程序就会尽可能快地进行渲染
+- `WindowEvent::CloseRequested` 会处理窗口收到的关闭请求，如点击$\times$。正是因为没处理这个事件，窗口才对$\times$根本不作响应。
+- `WindowEvent::RedrawRequested` 事件会在窗口被要求重新绘制窗口内容时被调用，这也将会是渲染部分被调用的位置。我们在每次渲染结束时都调用一次`window.request_redraw()`，这得以让我们的渲染自发地持续下去。
+- `WindowEvent::Resized` 事件在窗口大小改变时传入，我们通常用其调整我们的帧缓冲大小（这是什么？一切皆在 [3.1](../infra/graphics.md) 揭晓）。
 - 剩下的事件暂时管不着，我们直接`_`
-
-> 如果你翻阅了`Event`的文档，那么你或许发现了`WindowEvent`和`DeviceEvent`里面都有键盘、鼠标相关的事件。值得注意的是，`DeviceEvent`获取到的事件是直接来源于系统外设的信号的，因而并不受窗口聚焦等的限制。在游戏中，我们更倾向于使用后者，而在应用中我们更倾向于使用前者。
 
 这便是这个循环的主体，简单明了，却会是整个程序的主干，不容忽视。
 

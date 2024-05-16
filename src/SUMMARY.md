@@ -16,7 +16,7 @@
 - [顶点，像素，着色器！](./wgpu/beginner/README.md)
   - [七巧板？——图形与三角](./wgpu/beginner/triangle.md)
   - [一闪一闪亮晶晶——像素与窗口](./wgpu/beginner/pixel.md)
-  - [我变色了——着色器初步]()
+  - [我变色了——着色器初步](./wgpu/beginner/shader.md)
   - [来点色图——材质与采样]()
 - [矩阵，空间，坐标系]()
 - [多此一轴——三维渲染]()
